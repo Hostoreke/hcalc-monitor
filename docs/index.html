@@ -48,7 +48,8 @@
 //   2. 取不到（电脑关机/断网）就退回仓库里的 snapshot.json
 // 这样电脑不在线时页面也不会白屏。
 // ============================================================================
-const LIVE = 'https://hostoreke.tailacb782.ts.net/api/jobs';
+const LIVE_SSE = 'https://hostoreke.tailacb782.ts.net/api/stream';   // 实时流（SSE）
+const LIVE_API = 'https://hostoreke.tailacb782.ts.net/api/jobs';    // 单次 JSON（备用）
 const SNAP = './snapshot.json';
 
 const grid = document.getElementById('grid');
@@ -136,7 +137,12 @@ function startSnapshotMode(){
   const load = async () => {
     try{
       const r = await fetch(SNAP + '?t=' + Date.now(), {cache:'no-store'});
-      if(r.ok) render(await r.json());
+      if(r.ok){
+        const payload = await r.json();
+        // snapshot.json 结构为 {generated_at, source, jobs}，必须取 jobs 字段，
+        // 否则会把 generated_at 当成一个任务渲染成卡片。
+        render(payload.jobs || payload);
+      }
     }catch(e){ /* 快照也没有就保持空白 */ }
   };
   load();
@@ -147,7 +153,8 @@ function startSnapshotMode(){
 
 function tryLive(){
   try{
-    es = new EventSource(LIVE);
+    // 注意：必须是 /api/stream（SSE 端点），/api/jobs 只返回单次 JSON，EventSource 会立刻报错
+    es = new EventSource(LIVE_SSE);
     es.onmessage = (ev) => {
       if (snapTimer){ clearInterval(snapTimer); snapTimer = null; }
       setMode(true);
