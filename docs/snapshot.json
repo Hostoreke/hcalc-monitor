@@ -1,10 +1,10 @@
 {
-  "generated_at": "2026-11-16 19:56:22",
+  "generated_at": "2026-11-16 19:58:34",
   "source": "snapshot",
   "jobs": {
     "hBN 大碎片·β": {
       "exists": true,
-      "steps": 18,
+      "steps": 19,
       "energy": -3237.647515227277,
       "trace": [
         -3237.47501,
@@ -27,12 +27,12 @@
         -3237.647515
       ],
       "status": "运行中",
-      "size_kb": 2265.2,
-      "updated": "19:56:10"
+      "size_kb": 2381.5,
+      "updated": "19:58:15"
     },
     "hBN 大碎片·α": {
       "exists": true,
-      "steps": 18,
+      "steps": 19,
       "energy": -3237.655120548591,
       "trace": [
         -3237.475396,
@@ -55,8 +55,8 @@
         -3237.655121
       ],
       "status": "运行中",
-      "size_kb": 2076.1,
-      "updated": "19:56:11"
+      "size_kb": 2181.7,
+      "updated": "19:58:15"
     },
     "hBN 小碎片·β": {
       "exists": true,
