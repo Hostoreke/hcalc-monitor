@@ -5,25 +5,44 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>hCALC Monitor · hostoreke</title>
 <style>
-  :root{--bg:#0f172a;--card:#1e293b;--fg:#e2e8f0;--dim:#94a3b8;--accent:#38bdf8;--ok:#4ade80;--warn:#fbbf24;--bad:#f87171;}
+  :root{--bg:#0f172a;--card:#1e293b;--fg:#e2e8f0;--dim:#94a3b8;--accent:#38bdf8;--ok:#4ade80;--warn:#fbbf24;--bad:#f87171;--line:#334155;}
   *{box-sizing:border-box;margin:0;padding:0}
   body{background:var(--bg);color:var(--fg);font-family:-apple-system,"Segoe UI","Microsoft YaHei",sans-serif;padding:24px}
   h1{font-size:20px;font-weight:600}
+  h2{font-size:14px;font-weight:600;margin-bottom:10px;color:var(--fg)}
   .sub{color:var(--dim);font-size:13px;margin:4px 0 20px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-  .mode{font-size:11px;padding:2px 8px;border-radius:99px;font-weight:500}
+  .mode,.badge{font-size:11px;padding:2px 8px;border-radius:99px;font-weight:500}
   .m-live{background:#164e63;color:var(--accent)}
   .m-snap{background:#78350f;color:var(--warn)}
   .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px}
-  .card{background:var(--card);border-radius:12px;padding:16px;border:1px solid #334155}
+  .card{background:var(--card);border-radius:12px;padding:16px;border:1px solid var(--line)}
   .title{font-size:14px;font-weight:600;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center}
-  .badge{font-size:11px;padding:2px 8px;border-radius:99px;font-weight:500}
   .b-run{background:#164e63;color:var(--accent)}
   .b-ok{background:#14532d;color:var(--ok)}
   .b-bad{background:#7f1d1d;color:var(--bad)}
-  .b-idle{background:#334155;color:var(--dim)}
+  .b-idle{background:var(--line);color:var(--dim)}
   .row{display:flex;justify-content:space-between;font-size:12.5px;color:var(--dim);margin:4px 0}
   .row b{color:var(--fg);font-weight:600;font-variant-numeric:tabular-nums}
-  canvas{width:100%;height:110px;margin-top:10px;display:block}
+  canvas.spark{width:100%;height:110px;margin-top:10px;display:block}
+
+  /* ---------------- 3D 结构面板 ---------------- */
+  .viewer{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:20px}
+  .tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+  .tab{font-size:12.5px;padding:5px 12px;border-radius:8px;border:1px solid var(--line);
+       background:#0f172a;color:var(--dim);cursor:pointer;transition:.15s}
+  .tab:hover{border-color:var(--accent);color:var(--fg)}
+  .tab.on{background:var(--accent);border-color:var(--accent);color:#0f172a;font-weight:600}
+  #stage{width:100%;height:440px;display:block;border-radius:10px;background:
+        radial-gradient(circle at 50% 40%,#16233c 0%,#0b1220 75%);cursor:grab;touch-action:none}
+  #stage:active{cursor:grabbing}
+  .ctl{display:flex;align-items:center;gap:12px;margin-top:12px;flex-wrap:wrap;font-size:12.5px;color:var(--dim)}
+  .ctl input[type=range]{flex:1;min-width:160px;accent-color:var(--accent)}
+  .ctl .val{color:var(--fg);font-variant-numeric:tabular-nums;font-weight:600}
+  .legend{display:flex;gap:12px;font-size:12px;color:var(--dim);flex-wrap:wrap}
+  .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:4px;vertical-align:middle}
+  .btn{font-size:12px;padding:4px 10px;border-radius:7px;border:1px solid var(--line);
+       background:#0f172a;color:var(--dim);cursor:pointer}
+  .btn.on{border-color:var(--accent);color:var(--accent)}
   .foot{margin-top:20px;color:var(--dim);font-size:12px}
   .foot a{color:var(--accent);text-decoration:none}
 </style>
@@ -35,34 +54,56 @@
   <span class="mode m-live" id="mode">连接中…</span>
   <span id="ts"></span>
 </div>
+
+<!-- ===================== 3D 结构查看器 ===================== -->
+<div class="viewer">
+  <div class="tabs" id="tabs"></div>
+  <canvas id="stage"></canvas>
+  <div class="ctl">
+    <span>帧</span>
+    <input type="range" id="frame" min="1" max="1" value="1" step="1">
+    <span class="val" id="frameLabel">—</span>
+    <button class="btn on" id="autoBtn">自动旋转</button>
+    <button class="btn" id="liveBtn">跟随最新</button>
+    <span class="val" id="energyLabel">—</span>
+  </div>
+  <div class="ctl legend">
+    <span><i class="dot" style="background:#f0f0f0"></i>H</span>
+    <span><i class="dot" style="background:#8a8a8a"></i>C</span>
+    <span><i class="dot" style="background:#90e050"></i>F</span>
+    <span><i class="dot" style="background:#ffb5b5"></i>B</span>
+    <span><i class="dot" style="background:#4a6cf7"></i>N</span>
+    <span style="margin-left:auto">拖拽旋转 · 滚轮缩放 · 双击复位</span>
+  </div>
+</div>
+
 <div class="grid" id="grid"></div>
 <div class="foot">
-  数据源：本机 ORCA 输出实时解析　·　静态快照由 <code>snapshot.py</code> 生成　·　
-  <a href="https://hostoreke.tailacb782.ts.net/" target="_blank">打开实时看板</a>
+  数据源：本机 ORCA 输出与轨迹文件实时解析　·　
+  <a href="https://hostoreke.tailacb782.ts.net/" target="_blank">实时看板</a>　·　
+  <a href="https://github.com/Hostoreke/hcalc-monitor" target="_blank">源码</a>
 </div>
 
 <script>
 // ============================================================================
-// 数据源策略：
-//   1. 优先取 Tailscale Funnel 上的实时接口（5 秒刷新）
-//   2. 取不到（电脑关机/断网）就退回仓库里的 snapshot.json
-// 这样电脑不在线时页面也不会白屏。
+// 数据源：优先连 Tailscale Funnel 的实时接口；连不上则用仓库里的 snapshot.json
 // ============================================================================
-const LIVE_SSE = 'https://hostoreke.tailacb782.ts.net/api/stream';   // 实时流（SSE）
-const LIVE_API = 'https://hostoreke.tailacb782.ts.net/api/jobs';    // 单次 JSON（备用）
+const LIVE_SSE = 'https://hostoreke.tailacb782.ts.net/api/stream';
+const API_BASE = 'https://hostoreke.tailacb782.ts.net';
 const SNAP = './snapshot.json';
 
 const grid = document.getElementById('grid');
 const modeEl = document.getElementById('mode');
 const cards = {};
+let liveMode = false;
 
+// ---------------------------------------------------------------- 任务卡片
 function statusClass(s){
   if(s==='运行中') return 'b-run';
   if(s==='已完成') return 'b-ok';
   if(s==='失败')   return 'b-bad';
   return 'b-idle';
 }
-
 function makeCard(name){
   const el = document.createElement('div');
   el.className = 'card';
@@ -72,105 +113,306 @@ function makeCard(name){
     <div class="row"><span>当前能量 (Ha)</span><b class="v-energy">—</b></div>
     <div class="row"><span>输出文件</span><b class="v-size">—</b></div>
     <div class="row"><span>最后更新</span><b class="v-upd">—</b></div>
-    <canvas></canvas>`;
+    <canvas class="spark"></canvas>`;
   grid.appendChild(el);
-  return {
-    badge: el.querySelector('.badge'),
-    steps: el.querySelector('.v-steps'),
-    energy: el.querySelector('.v-energy'),
-    size: el.querySelector('.v-size'),
-    upd: el.querySelector('.v-upd'),
-    canvas: el.querySelector('canvas')
-  };
+  return {badge:el.querySelector('.badge'), steps:el.querySelector('.v-steps'),
+          energy:el.querySelector('.v-energy'), size:el.querySelector('.v-size'),
+          upd:el.querySelector('.v-upd'), canvas:el.querySelector('canvas.spark')};
 }
-
-function draw(canvas, trace){
-  const dpr = window.devicePixelRatio || 1;
-  const w = canvas.clientWidth, h = canvas.clientHeight;
-  canvas.width = w*dpr; canvas.height = h*dpr;
-  const ctx = canvas.getContext('2d');
-  ctx.setTransform(dpr,0,0,dpr,0,0);
+function drawSpark(canvas, trace){
+  const dpr=window.devicePixelRatio||1, w=canvas.clientWidth, h=canvas.clientHeight;
+  canvas.width=w*dpr; canvas.height=h*dpr;
+  const ctx=canvas.getContext('2d'); ctx.setTransform(dpr,0,0,dpr,0,0);
   ctx.clearRect(0,0,w,h);
-  ctx.strokeStyle = '#334155'; ctx.lineWidth = 1;
+  ctx.strokeStyle='#334155'; ctx.lineWidth=1;
   ctx.beginPath(); ctx.moveTo(0,h-1); ctx.lineTo(w,h-1); ctx.stroke();
-  if(!trace || trace.length < 2){
-    ctx.fillStyle = '#64748b'; ctx.font = '11px sans-serif';
-    ctx.fillText('等待能量数据…', 8, h/2); return;
+  if(!trace||trace.length<2){
+    ctx.fillStyle='#64748b'; ctx.font='11px sans-serif';
+    ctx.fillText('等待能量数据…',8,h/2); return;
   }
-  const lo = Math.min(...trace), hi = Math.max(...trace);
-  const pad = (hi-lo)*0.15 || 0.001;
-  const y0 = lo-pad, y1 = hi+pad;
-  const X = i => (i/(trace.length-1))*(w-8)+4;
-  const Y = v => h-6-((v-y0)/(y1-y0))*(h-12);
-  ctx.strokeStyle = '#38bdf8'; ctx.lineWidth = 1.8;
-  ctx.beginPath();
-  trace.forEach((v,i)=> i? ctx.lineTo(X(i),Y(v)) : ctx.moveTo(X(i),Y(v)));
+  const lo=Math.min(...trace), hi=Math.max(...trace), pad=(hi-lo)*0.15||0.001;
+  const X=i=>(i/(trace.length-1))*(w-8)+4, Y=v=>h-6-((v-(lo-pad))/((hi+pad)-(lo-pad)))*(h-12);
+  ctx.strokeStyle='#38bdf8'; ctx.lineWidth=1.8; ctx.beginPath();
+  trace.forEach((v,i)=> i?ctx.lineTo(X(i),Y(v)):ctx.moveTo(X(i),Y(v)));
   ctx.stroke();
-  ctx.fillStyle = '#38bdf8';
-  ctx.beginPath(); ctx.arc(X(trace.length-1), Y(trace[trace.length-1]), 3, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle='#38bdf8'; ctx.beginPath();
+  ctx.arc(X(trace.length-1),Y(trace[trace.length-1]),3,0,Math.PI*2); ctx.fill();
+}
+function renderCards(data){
+  Object.entries(data).forEach(([name,j])=>{
+    const c=cards[name]||(cards[name]=makeCard(name));
+    c.badge.textContent=j.status; c.badge.className='badge '+statusClass(j.status);
+    c.steps.textContent=j.steps;
+    c.energy.textContent=j.energy===null?'—':j.energy.toFixed(6);
+    c.size.textContent=j.size_kb+' KB';
+    c.upd.textContent=j.updated||'—';
+    drawSpark(c.canvas,j.trace);
+  });
+}
+function setMode(live){
+  liveMode=live;
+  modeEl.textContent = live?'实时':'离线快照';
+  modeEl.className = 'mode '+(live?'m-live':'m-snap');
 }
 
-function render(data){
-  Object.entries(data).forEach(([name, j]) => {
-    const c = cards[name] || (cards[name] = makeCard(name));
-    c.badge.textContent = j.status;
-    c.badge.className = 'badge ' + statusClass(j.status);
-    c.steps.textContent = j.steps;
-    c.energy.textContent = j.energy === null ? '—' : j.energy.toFixed(6);
-    c.size.textContent = j.size_kb + ' KB';
-    c.upd.textContent = j.updated || '—';
-    draw(c.canvas, j.trace);
+// ============================================================================
+// 3D 渲染器：零依赖，Canvas 2D 手绘 + 深度排序（画家算法）
+// 之所以不用 3Dmol.js/NGL：本项目网络对 jsDelivr 等 CDN 不可达，引外部库会白屏。
+// ============================================================================
+const EL_COLOR = {H:'#f0f0f0', C:'#8a8a8a', F:'#90e050', B:'#ffb5b5', N:'#4a6cf7', O:'#ff5050'};
+const EL_RADIUS = {H:5, C:9, F:8, B:10, N:9, O:9};
+const EL_COV = {H:0.31, C:0.76, F:0.57, B:0.84, N:0.71, O:0.66};
+
+const V = {rotX:-0.32, rotY:0.55, zoom:1, atoms:[], bonds:[], auto:true,
+           drag:false, lx:0, ly:0, idx:0, frame:null, frames:0};
+
+const stage = document.getElementById('stage');
+const ctx3 = stage.getContext('2d');
+
+function computeBonds(atoms){
+  const b=[];
+  for(let i=0;i<atoms.length;i++){
+    for(let j=i+1;j<atoms.length;j++){
+      const a=atoms[i], c=atoms[j];
+      const dx=a[1]-c[1], dy=a[2]-c[2], dz=a[3]-c[3];
+      const d2=dx*dx+dy*dy+dz*dz;
+      if(d2>25) continue;                       // 5 Å 以上的原子对不考虑成键
+      const lim=EL_COV[a[0]]+EL_COV[c[0]]+0.45; // 共价半径和 + 容差
+      if(d2 < lim*lim) b.push([i,j]);
+    }
+  }
+  return b;
+}
+
+function setStructure(struct){
+  V.atoms = struct.atoms || [];
+  V.frame = struct.frame; V.frames = struct.frames || 0;
+  V.bonds = computeBonds(V.atoms);
+  // 自动缩放：把分子最大半径归一化到画布内
+  let maxR=0;
+  const n=V.atoms.length;
+  if(n){
+    let cx=0,cy=0,cz=0;
+    V.atoms.forEach(a=>{cx+=a[1];cy+=a[2];cz+=a[3];});
+    cx/=n; cy/=n; cz/=n;
+    V.atoms.forEach(a=>{
+      const r=Math.hypot(a[1]-cx,a[2]-cy,a[3]-cz);
+      if(r>maxR) maxR=r;
+    });
+    V.center=[cx,cy,cz]; V.maxR=maxR||1;
+  }
+  const eLabel=document.getElementById('energyLabel');
+  eLabel.textContent = struct.energy==null ? '—' : 'E = '+struct.energy.toFixed(6)+' Ha';
+  const fr=document.getElementById('frame'), fl=document.getElementById('frameLabel');
+  if(V.frames){
+    fr.max=V.frames; fr.value=V.frame||V.frames;
+    fl.textContent=(V.frame||V.frames)+' / '+V.frames;
+  }
+  draw3D();
+}
+
+function draw3D(){
+  const dpr=window.devicePixelRatio||1;
+  const w=stage.clientWidth, h=stage.clientHeight;
+  if(stage.width!==w*dpr||stage.height!==h*dpr){ stage.width=w*dpr; stage.height=h*dpr; }
+  ctx3.setTransform(dpr,0,0,dpr,0,0);
+  ctx3.clearRect(0,0,w,h);
+  if(!V.atoms.length){
+    ctx3.fillStyle='#64748b'; ctx3.font='13px sans-serif';
+    ctx3.fillText('暂无结构数据（任务还没开始优化，或轨迹文件未生成）',16,h/2);
+    return;
+  }
+  const [cx,cy,cz]=V.center;
+  const scale=(Math.min(w,h)*0.42/V.maxR)*V.zoom;
+  const cosY=Math.cos(V.rotY), sinY=Math.sin(V.rotY);
+  const cosX=Math.cos(V.rotX), sinX=Math.sin(V.rotX);
+
+  // 旋转 + 投影
+  const P=[];
+  for(let i=0;i<V.atoms.length;i++){
+    const a=V.atoms[i];
+    let x=a[1]-cx, y=a[2]-cy, z=a[3]-cz;
+    let x1= x*cosY + z*sinY;
+    let z1=-x*sinY + z*cosY;
+    let y1= y*cosX - z1*sinX;
+    let z2= y*sinX + z1*cosX;
+    P.push([w/2+x1*scale, h/2-y1*scale, z2]);
+  }
+
+  // 深度排序（画家算法）：先画远的
+  const order=P.map((p,i)=>i).sort((i,j)=>P[i][2]-P[j][2]);
+  const rank=new Array(P.length);
+  order.forEach((idx,r)=>{rank[idx]=r;});
+
+  // 键（画在原子之前，用较暗的颜色）
+  ctx3.lineCap='round';
+  for(const [i,j] of V.bonds){
+    ctx3.strokeStyle='rgba(150,165,190,0.55)';
+    ctx3.lineWidth = 2.6*V.zoom;
+    ctx3.beginPath();
+    ctx3.moveTo(P[i][0],P[i][1]); ctx3.lineTo(P[j][0],P[j][1]);
+    ctx3.stroke();
+  }
+
+  // 原子：远小近大，带高光
+  for(const i of order){
+    const a=V.atoms[i];
+    const rr=(EL_RADIUS[a[0]]||8)*V.zoom;
+    const [px,py,pz]=P[i];
+    const shade=Math.max(0.45, Math.min(1.15, 1+pz/(V.maxR*2)));
+    ctx3.globalAlpha=0.95;
+    ctx3.fillStyle=EL_COLOR[a[0]]||'#cccccc';
+    ctx3.beginPath(); ctx3.arc(px,py,rr,0,Math.PI*2); ctx3.fill();
+    // 高光
+    ctx3.globalAlpha=0.30;
+    ctx3.fillStyle='#ffffff';
+    ctx3.beginPath(); ctx3.arc(px-rr*0.3,py-rr*0.32,rr*0.42,0,Math.PI*2); ctx3.fill();
+    // 暗边，增强立体感
+    ctx3.globalAlpha=0.28*shade;
+    ctx3.strokeStyle='#000000'; ctx3.lineWidth=Math.max(1,rr*0.14);
+    ctx3.beginPath(); ctx3.arc(px,py,rr*0.94,0,Math.PI*2); ctx3.stroke();
+  }
+  ctx3.globalAlpha=1;
+}
+
+// ---- 交互 ----
+stage.addEventListener('pointerdown', e=>{
+  V.drag=true; V.lx=e.clientX; V.ly=e.clientY; stage.setPointerCapture(e.pointerId);
+});
+stage.addEventListener('pointermove', e=>{
+  if(!V.drag) return;
+  V.rotY += (e.clientX-V.lx)*0.008;
+  V.rotX += (e.clientY-V.ly)*0.008;
+  V.rotX = Math.max(-1.5, Math.min(1.5, V.rotX));
+  V.lx=e.clientX; V.ly=e.clientY;
+  draw3D();
+});
+stage.addEventListener('pointerup', e=>{ V.drag=false; });
+stage.addEventListener('wheel', e=>{
+  e.preventDefault();
+  V.zoom *= (e.deltaY<0 ? 1.1 : 0.9);
+  V.zoom = Math.max(0.3, Math.min(4, V.zoom));
+  draw3D();
+}, {passive:false});
+stage.addEventListener('dblclick', ()=>{
+  V.rotX=-0.32; V.rotY=0.55; V.zoom=1; draw3D();
+});
+
+// 自动旋转
+let lastT=0;
+function spin(t){
+  if(V.auto && !V.drag && t-lastT>33){
+    V.rotY += 0.006; draw3D(); lastT=t;
+  }
+  requestAnimationFrame(spin);
+}
+requestAnimationFrame(spin);
+
+document.getElementById('autoBtn').addEventListener('click', e=>{
+  V.auto=!V.auto; e.target.classList.toggle('on', V.auto);
+});
+document.getElementById('liveBtn').addEventListener('click', ()=>{
+  followLive=true; loadStructure(V.idx);
+});
+document.getElementById('frame').addEventListener('input', e=>{
+  followLive=false;
+  loadFrame(V.idx, parseInt(e.target.value,10));
+});
+
+// ---- 结构数据获取 ----
+let followLive=true, structTimer=null;
+
+async function loadStructure(idx){
+  V.idx=idx;
+  if(!liveMode){
+    // 离线模式：从 snapshot 里取内嵌结构
+    if(SNAP_STRUCT && SNAP_STRUCT[idx]) setStructure(SNAP_STRUCT[idx]);
+    return;
+  }
+  try{
+    const r=await fetch(`${API_BASE}/api/structure/${idx}`,{cache:'no-store'});
+    const j=await r.json();
+    if(j.ok) setStructure(j);
+  }catch(e){ /* 忽略，下次再试 */ }
+}
+async function loadFrame(idx,n){
+  if(!liveMode) return;
+  try{
+    const r=await fetch(`${API_BASE}/api/structure/${idx}/frame/${n}`,{cache:'no-store'});
+    const j=await r.json();
+    if(j.ok) setStructure(j);
+  }catch(e){}
+}
+
+// ---- 任务标签 ----
+let JOB_NAMES=[], SNAP_STRUCT=null;
+function buildTabs(names){
+  if(JOB_NAMES.length===names.length) return;
+  JOB_NAMES=names;
+  const box=document.getElementById('tabs');
+  box.innerHTML='';
+  names.forEach((n,i)=>{
+    const b=document.createElement('button');
+    b.className='tab'+(i===0?' on':'');
+    b.textContent=n;
+    b.onclick=()=>{
+      document.querySelectorAll('.tab').forEach(t=>t.classList.remove('on'));
+      b.classList.add('on');
+      followLive=true; loadStructure(i);
+    };
+    box.appendChild(b);
   });
 }
 
-function setMode(live){
-  modeEl.textContent = live ? '实时' : '离线快照';
-  modeEl.className = 'mode ' + (live ? 'm-live' : 'm-snap');
-}
+// ============================================================================
+// 数据流：SSE 实时 / snapshot 兜底
+// ============================================================================
+let es=null, snapTimer=null;
 
-// ---- 实时：EventSource（失败自动回落到快照） ----
-let es = null, snapTimer = null;
-
-function startSnapshotMode(){
-  if (snapTimer) return;            // 已在快照模式
+async function startSnapshotMode(){
+  if(snapTimer) return;
   setMode(false);
-  const load = async () => {
+  const load=async()=>{
     try{
-      const r = await fetch(SNAP + '?t=' + Date.now(), {cache:'no-store'});
+      const r=await fetch(SNAP+'?t='+Date.now(),{cache:'no-store'});
       if(r.ok){
-        const payload = await r.json();
-        // snapshot.json 结构为 {generated_at, source, jobs}，必须取 jobs 字段，
-        // 否则会把 generated_at 当成一个任务渲染成卡片。
-        render(payload.jobs || payload);
+        const p=await r.json();
+        SNAP_STRUCT = p.structures || null;
+        buildTabs(Object.keys(p.jobs||{}));
+        renderCards(p.jobs||{});
+        if(SNAP_STRUCT && SNAP_STRUCT[V.idx]) setStructure(SNAP_STRUCT[V.idx]);
       }
-    }catch(e){ /* 快照也没有就保持空白 */ }
+    }catch(e){}
   };
   load();
-  snapTimer = setInterval(load, 30000);   // 快照每 30 秒重读
-  // 后台继续尝试恢复实时连接
-  setTimeout(tryLive, 60000);
+  snapTimer=setInterval(load,30000);
+  setTimeout(tryLive,60000);
 }
 
 function tryLive(){
   try{
-    // 注意：必须是 /api/stream（SSE 端点），/api/jobs 只返回单次 JSON，EventSource 会立刻报错
-    es = new EventSource(LIVE_SSE);
-    es.onmessage = (ev) => {
-      if (snapTimer){ clearInterval(snapTimer); snapTimer = null; }
+    es=new EventSource(LIVE_SSE);
+    es.onmessage=(ev)=>{
+      if(snapTimer){clearInterval(snapTimer);snapTimer=null;}
       setMode(true);
-      document.getElementById('ts').textContent = new Date().toLocaleTimeString('zh-CN');
-      render(JSON.parse(ev.data));
+      document.getElementById('ts').textContent=new Date().toLocaleTimeString('zh-CN');
+      const data=JSON.parse(ev.data);
+      buildTabs(Object.keys(data));
+      renderCards(data);
+      if(!structTimer){
+        loadStructure(V.idx);
+        structTimer=setInterval(()=>{ if(followLive) loadStructure(V.idx); },10000);
+      }
     };
-    es.onerror = () => {
-      if (es){ es.close(); es = null; }
+    es.onerror=()=>{
+      if(es){es.close();es=null;}
       startSnapshotMode();
     };
-  }catch(e){
-    startSnapshotMode();
-  }
+  }catch(e){ startSnapshotMode(); }
 }
 
 tryLive();
+window.addEventListener('resize', ()=>draw3D());
 </script>
 </body>
 </html>

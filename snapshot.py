@@ -1,4 +1,4 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 """
 ================================================================================
 生成静态快照 snapshot.json，供 GitHub Pages 在电脑离线时兜底展示
@@ -31,7 +31,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
 # 复用监控服务的解析逻辑，避免两处逻辑不一致
-from monitor import snapshot as read_snapshot          # noqa: E402
+from monitor import (snapshot as read_snapshot,      # noqa: E402
+                     JOBS, latest_structure)
 
 OUT = os.path.join(HERE, "docs", "snapshot.json")
 
@@ -42,6 +43,8 @@ def write_snapshot():
         "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "source": "snapshot",
         "jobs": data,
+        # 内嵌各任务最新一帧结构，使电脑离线时网页仍能显示 3D 分子
+        "structures": [latest_structure(p) for p in JOBS.values()],
     }
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     with open(OUT, "w", encoding="utf-8") as f:
