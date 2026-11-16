@@ -324,16 +324,12 @@ let followLive=true, structTimer=null;
 
 async function loadStructure(idx){
   V.idx=idx;
-  if(!liveMode){
-    // 离线模式：从 snapshot 里取内嵌结构
-    if(SNAP_STRUCT && SNAP_STRUCT[idx]) setStructure(SNAP_STRUCT[idx]);
-    return;
-  }
   try{
     const r=await fetch(`${API_BASE}/api/structure/${idx}`,{cache:'no-store'});
     const j=await r.json();
-    if(j.ok) setStructure(j);
-  }catch(e){ /* 忽略，下次再试 */ }
+    if(j.ok){ setStructure(j); return; }
+  }catch(e){ /* 失败则回落到同源快照 */ }
+  if(SNAP_STRUCT && SNAP_STRUCT[idx]) setStructure(SNAP_STRUCT[idx]);
 }
 async function loadFrame(idx,n){
   if(!liveMode) return;
@@ -410,6 +406,24 @@ function tryLive(){
     };
   }catch(e){ startSnapshotMode(); }
 }
+
+// ============================================================================
+// 启动引导：先用同源 snapshot.json 立即渲染。
+// 同源请求不受浏览器「私网访问」限制，因此即使跨域接口被拦，
+// 也能马上看到最近一次的结构与数据，不会白屏。
+// ============================================================================
+async function bootstrap(){
+  try{
+    const r=await fetch(SNAP+'?t='+Date.now(),{cache:'no-store'});
+    if(!r.ok) return;
+    const p=await r.json();
+    SNAP_STRUCT = p.structures || null;
+    buildTabs(Object.keys(p.jobs||{}));
+    renderCards(p.jobs||{});
+    if(SNAP_STRUCT && SNAP_STRUCT[0]) setStructure(SNAP_STRUCT[0]);
+  }catch(e){ /* 忽略 */ }
+}
+bootstrap();
 
 tryLive();
 window.addEventListener('resize', ()=>draw3D());
