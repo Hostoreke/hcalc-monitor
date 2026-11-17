@@ -279,8 +279,12 @@ def api_stretch():
         energy, done = e if e else (None, False)
         if done:
             completed += 1
-        elif energy is None:
+        else:
+            # 关键：未完成任务的"当前能量"是优化中途的值，可能高出几个哈特里，
+            # 若把它画进曲线会得到一个上千 kJ/mol 的假点，把纵轴撑爆，
+            # 导致真实数据看起来是一条平线。所以未完成的任务一律不参与曲线。
             running.append(stem)
+            energy = None
 
         key = (n, "free" if is_free else d)
         raw.setdefault(key, {})[kind] = {"energy": energy, "done": done,
