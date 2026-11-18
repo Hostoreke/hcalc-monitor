@@ -55,22 +55,6 @@
   <span id="ts"></span>
 </div>
 
-<!-- ===================== 拉伸扫描面板 ===================== -->
-<div class="stretch" id="stretchPanel">
-  <div class="hd">
-    <h2>拉伸扫描 · ΔE(d) 实时曲线</h2>
-    <span class="mode m-snap" id="stMode">加载中…</span>
-  </div>
-  <div class="progwrap"><div class="progbar" id="stBar"></div></div>
-  <div class="stmeta">
-    <span>进度 <b id="stProg">—</b></span>
-    <span>交叉点 d* <b id="stStar">—</b></span>
-    <span>更新时间 <b id="stUpd">—</b></span>
-  </div>
-  <div class="stmeta" id="stFree"></div>
-  <canvas id="stretchChart"></canvas>
-</div>
-
 <!-- ===================== 3D 结构查看器 ===================== -->
 <div class="viewer">
   <div class="tabs" id="tabs"></div>
@@ -92,19 +76,6 @@
     <span style="margin-left:auto">拖拽旋转 · 滚轮缩放 · 双击复位</span>
   </div>
 </div>
-
-<style>
-  /* ---------------- 拉伸扫描面板 ---------------- */
-  .stretch{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:20px}
-  .stretch .hd{display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:8px;margin-bottom:10px}
-  .stretch .hd h2{margin:0}
-  .progwrap{height:8px;background:#0f172a;border-radius:99px;overflow:hidden;margin:8px 0 4px;border:1px solid var(--line)}
-  .progbar{height:100%;background:linear-gradient(90deg,#38bdf8,#4ade80);width:0%;transition:width .6s}
-  .stmeta{display:flex;gap:16px;flex-wrap:wrap;font-size:12.5px;color:var(--dim);margin-bottom:6px}
-  .stmeta b{color:var(--fg);font-variant-numeric:tabular-nums}
-  #stretchChart{width:100%;height:300px;display:block;margin-top:8px}
-  .star{color:var(--ok);font-weight:600}
-</style>
 
 <div class="grid" id="grid"></div>
 <div class="foot">
@@ -435,126 +406,6 @@ function tryLive(){
     };
   }catch(e){ startSnapshotMode(); }
 }
-
-// ============================================================================
-// 拉伸扫描面板：单独轮询 /api/stretch（每 30 秒）
-// 不走 SSE，因为这个接口要读 24 个输出文件，塞进 5 秒一次的推送里太重。
-// ============================================================================
-const ST_API = API_BASE + '/api/stretch';
-const stCanvas = document.getElementById('stretchChart');
-
-function drawStretch(data){
-  const dpr = window.devicePixelRatio || 1;
-  const w = stCanvas.clientWidth, h = stCanvas.clientHeight;
-  stCanvas.width = w*dpr; stCanvas.height = h*dpr;
-  const ctx = stCanvas.getContext('2d');
-  ctx.setTransform(dpr,0,0,dpr,0,0);
-  ctx.clearRect(0,0,w,h);
-
-  const series = data.series || {};
-  const keys = Object.keys(series).filter(k => series[k] && series[k].length);
-  if(!keys.length){
-    ctx.fillStyle = '#64748b'; ctx.font = '13px sans-serif';
-    ctx.fillText('等待成对数据（同一端距下 α 与 β 都算完才会出点）…', 14, h/2);
-    return;
-  }
-
-  // 计算坐标范围
-  let xs = [], ys = [];
-  keys.forEach(k => series[k].forEach(p => { xs.push(p.d); ys.push(p.dE_per_unit); }));
-  const x0 = Math.min(...xs) - 0.4, x1 = Math.max(...xs) + 0.4;
-  const ylo = Math.min(0, Math.min(...ys)), yhi = Math.max(0, Math.max(...ys));
-  const pad = (yhi - ylo) * 0.18 || 1;
-  const y0 = ylo - pad, y1 = yhi + pad;
-
-  const L = 62, R = 16, T = 14, B = 34;
-  const PX = d => L + (d - x0) / (x1 - x0) * (w - L - R);
-  const PY = v => h - B - (v - y0) / (y1 - y0) * (h - T - B);
-
-  // 坐标框
-  ctx.strokeStyle = '#334155'; ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.moveTo(L, T); ctx.lineTo(L, h-B); ctx.lineTo(w-R, h-B); ctx.stroke();
-
-  // 零线
-  ctx.strokeStyle = '#64748b'; ctx.setLineDash([4,4]);
-  ctx.beginPath(); ctx.moveTo(L, PY(0)); ctx.lineTo(w-R, PY(0)); ctx.stroke();
-  ctx.setLineDash([]);
-  ctx.fillStyle = '#94a3b8'; ctx.font = '10px sans-serif';
-  ctx.fillText('ΔE = 0', L+4, PY(0)-4);
-
-  // 刻度
-  ctx.fillStyle = '#64748b'; ctx.font = '10px sans-serif';
-  for(let i=0;i<=4;i++){
-    const v = y0 + (y1-y0)*i/4;
-    ctx.fillText(v.toFixed(1), 6, PY(v)+3);
-  }
-  for(let i=0;i<=4;i++){
-    const d = x0 + (x1-x0)*i/4;
-    ctx.fillText(d.toFixed(1), PX(d)-10, h-B+14);
-  }
-  ctx.fillText('d (Å)', w-R-30, h-B+26);
-
-  // 交叉点竖线
-  const colors = {'7':'#38bdf8','9':'#f472b6'};
-  Object.entries(data.d_star || {}).forEach(([n, dstar]) => {
-    ctx.strokeStyle = colors[n] || '#4ade80';
-    ctx.setLineDash([3,3]); ctx.lineWidth = 1.2;
-    ctx.beginPath(); ctx.moveTo(PX(dstar), T); ctx.lineTo(PX(dstar), h-B); ctx.stroke();
-    ctx.setLineDash([]);
-  });
-
-  // 曲线
-  keys.forEach(n => {
-    const pts = series[n].slice().sort((a,b)=>a.d-b.d);
-    const col = colors[n] || '#38bdf8';
-    ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.beginPath();
-    pts.forEach((p,i) => i ? ctx.lineTo(PX(p.d), PY(p.dE_per_unit))
-                           : ctx.moveTo(PX(p.d), PY(p.dE_per_unit)));
-    ctx.stroke();
-    ctx.fillStyle = col;
-    pts.forEach(p => { ctx.beginPath(); ctx.arc(PX(p.d), PY(p.dE_per_unit), 3.5, 0, Math.PI*2); ctx.fill(); });
-  });
-
-  // 图例
-  let lx = L + 8;
-  keys.forEach(n => {
-    ctx.fillStyle = colors[n] || '#38bdf8';
-    ctx.fillRect(lx, T, 14, 3);
-    ctx.fillStyle = '#cbd5e1'; ctx.font = '11px sans-serif';
-    ctx.fillText('n = ' + n, lx + 18, T + 5);
-    lx += 76;
-  });
-}
-
-async function loadStretch(){
-  try{
-    const r = await fetch(ST_API, {cache:'no-store'});
-    const d = await r.json();
-    const pct = d.total ? Math.round(d.completed / d.total * 100) : 0;
-    document.getElementById('stBar').style.width = pct + '%';
-    document.getElementById('stProg').textContent = `${d.completed} / ${d.total}（${pct}%）`;
-    const ds = d.d_star || {};
-    document.getElementById('stStar').textContent = Object.keys(ds).length
-      ? Object.entries(ds).map(([n,v]) => `n=${n}: ${v} Å`).join('　')
-      : '待定（需更多点）';
-    document.getElementById('stUpd').textContent = d.updated || '—';
-    const free = d.free || {};
-    document.getElementById('stFree').textContent = Object.keys(free).length
-      ? '自由端距：' + Object.entries(free).map(([n,v]) =>
-          `n=${n} β ${v.beta ?? '—'} Å / α ${v.alpha ?? '—'} Å`).join('　')
-      : '';
-    const m = document.getElementById('stMode');
-    m.textContent = d.running && d.running.length ? '计算中' : (d.completed ? '已完成' : '等待');
-    m.className = 'mode ' + (d.running && d.running.length ? 'm-live' : 'm-snap');
-    drawStretch(d);
-  }catch(e){
-    document.getElementById('stMode').textContent = '接口不可达';
-    document.getElementById('stMode').className = 'mode m-snap';
-  }
-}
-loadStretch();
-setInterval(loadStretch, 30000);
-window.addEventListener('resize', () => loadStretch());
 
 // ============================================================================
 // 启动引导：先用同源 snapshot.json 立即渲染。
