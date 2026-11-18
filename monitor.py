@@ -38,11 +38,11 @@ PORT = int(os.environ.get("MONITOR_PORT", "8000"))
 PVDF = r"D:\Calculation\PVDF"
 
 # 监控的任务清单：标签 -> 输出文件路径
-# 大碎片两项在断电续算后写入 resume_*.out，故指向该文件；
-# 续算尚未开始时页面显示「未开始」，不会报错。
+# 当前主线是长链界面计算（92 原子），输出在 hbn_long/；
+# 小碎片两项保留作已完成任务的参照。
 JOBS = {
-    "hBN 大碎片·β": os.path.join(PVDF, "hbn_big", "resume_beta.out"),
-    "hBN 大碎片·α": os.path.join(PVDF, "hbn_big", "resume_alpha.out"),
+    "长链界面·β (n=9)": os.path.join(PVDF, "hbn_long", "complex_beta.out"),
+    "长链界面·α (n=9)": os.path.join(PVDF, "hbn_long", "complex_alpha.out"),
     "hBN 小碎片·β": os.path.join(PVDF, "hbn", "opt_beta_on_hBN.out"),
     "hBN 小碎片·α": os.path.join(PVDF, "hbn", "opt_alpha_on_hBN.out"),
 }
